@@ -189,11 +189,7 @@ h2_left  = H2(i-1 + I2 + 1, idx_j);   % (i-1/2, j)
 
 ---
 
-## License
 
-MIT © 2024 [Your Name]
-
----
 
 ## 致谢
 
