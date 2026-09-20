@@ -318,7 +318,7 @@ ylim([1e-3 1.5]);          % 固定纵轴范围
 xlabel('Time  t');
 ylabel('Normalized energy norm  ||V||_{l^2(\Omega_1)}');
 title(sprintf('2D FDTD-UPML: energy norm vs time  (\\sigma = %g, S = %.3f)', sigma, tau/l1));
-% 设为白底（MATLAB R2025a 起默认深色主题，导出到报告/PPT 需要白底）
+% 设为白底
 set(gcf, 'Color', 'w');
 set(gca, 'Color', 'none', 'XColor', 'k', 'YColor', 'k', ...
     'GridColor', [0.15 0.15 0.15], 'GridAlpha', 0.15);
