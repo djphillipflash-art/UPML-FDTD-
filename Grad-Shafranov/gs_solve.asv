@@ -1,0 +1,100 @@
+function [psi, R, z, info] = gs_solve(p, NR, Nz)
+%GS_SOLVE  在矩形域上用二阶中心差分求解 Grad-Shafranov 方程（固定边界）
+%
+%   [psi, R, z, info] = gs_solve(p, NR, Nz)
+%
+% 求解
+%       Delta* psi = -A*R^2 - B,      (R,z) ∈ [Rmin,Rmax] × [-zmax,zmax]
+%       psi = psi_exact              （边界，Dirichlet）
+% 其中 Delta* = d^2/dR^2 - (1/R)*d/dR + d^2/dz^2
+%
+% 离散（二阶中心差分）：
+%       (psi_{i+1,j} - 2psi_{i,j} + psi_{i-1,j}) / hR^2
+%     - (1/R_i) * (psi_{i+1,j} - psi_{i-1,j}) / (2 hR)
+%     + (psi_{i,j+1} - 2psi_{i,j} + psi_{i,j-1}) / hz^2
+%     = -A*R_i^2 - B
+%
+% 只对内部节点建立未知量，边界值由解析解给出（Dirichlet），
+% 因此本算例是纯粹的**代码验证**（code verification）：
+% 离散误差应当以二阶收敛到解析解。
+%
+% 输入
+%   p    : 参数结构体（A, B, R0, F0, F1, Rmin, Rmax, zmax）
+%   NR   : R 方向节点数
+%   Nz   : z 方向节点数
+%
+% 输出
+%   psi  : NR × Nz 的数值解
+%   R, z : 网格坐标向量
+%   info : 结构体（hR, hz, 未知量个数、求解耗时）
+
+    R = linspace(p.Rmin, p.Rmax, NR)';
+    z = linspace(-p.zmax, p.zmax, Nz)';
+    hR = R(2) - R(1);
+    hz = z(2) - z(1);
+
+    % 边界值取解析解
+    [PSIex, ~, ~] = gs_exact(R*ones(1,Nz), ones(NR,1)*z', p);
+    psi = PSIex;
+
+    % 内部节点编号：id(i,j) = (i-2)*nJ + (j-1)，i = 2..NR-1, j = 2..Nz-1
+    nI = NR - 2;   nJ = Nz - 2;
+    n  = nI * nJ;
+    id = @(i,j) (i-2)*nJ + (j-1);%id(i,j) 把二维指标映射成一维编号，便于组装稀疏矩阵
+
+    rows = zeros(5*n, 1);  cols = zeros(5*n, 1);  vals = zeros(5*n, 1);
+    b    = zeros(n, 1);
+    k = 0;
+
+    for i = 2 : NR-1
+        Ri = R(i);
+        for j = 2 : Nz-1
+            r = id(i,j);
+
+            % 未知量自身
+            k=k+1; rows(k)=r; cols(k)=r; vals(k) = -2/hR^2 - 2/hz^2;%psi
+
+            % R 方向邻居（含 -1/R * d/dR 的一阶项）；只在邻居也是内部点时进矩阵
+            cR_p = 1/hR^2 - 1/(2*hR*Ri);      % 对应 psi_{i+1,j}
+            cR_m = 1/hR^2 + 1/(2*hR*Ri);      % 对应 psi_{i-1,j}
+            if i < NR-1
+                k=k+1; rows(k)=r; cols(k)=id(i+1,j); vals(k) = cR_p;
+            end
+            if i > 2
+                k=k+1; rows(k)=r; cols(k)=id(i-1,j); vals(k) = cR_m;
+            end
+
+            % z 方向邻居
+            if j < Nz-1
+                k=k+1; rows(k)=r; cols(k)=id(i,j+1); vals(k) = 1/hz^2;
+            end
+            if j > 2
+                k=k+1; rows(k)=r; cols(k)=id(i,j-1); vals(k) = 1/hz^2;
+            end
+
+            % 右端项；边界点的贡献移到右端（Dirichlet）
+            rhs = -p.A*Ri^2 - p.B;
+            if i == 2,     rhs = rhs - cR_m * psi(i-1,j); end
+            if i == NR-1,  rhs = rhs - cR_p * psi(i+1,j); end
+            if j == 2,     rhs = rhs - (1/hz^2) * psi(i,j-1); end
+            if j == Nz-1,  rhs = rhs - (1/hz^2) * psi(i,j+1); end
+            b(r) = rhs;
+        end
+    end
+
+    A_mat = sparse(rows(1:k), cols(1:k), vals(1:k), n, n);
+
+    tic;
+    sol = A_mat \ b;                 % 稀疏直接求解（内部为 LU 分解）
+    t_solve = toc;
+
+    % 填回网格
+    for i = 2 : NR-1
+        for j = 2 : Nz-1
+            psi(i,j) = sol(id(i,j));
+        end
+    end
+
+    info = struct('hR', hR, 'hz', hz, 'n_unknown', n, 't_solve', t_solve, ...
+                  'nnz', nnz(A_mat), 'A', A_mat, 'b', b);   % A、b 供求解器比较使用
+end
