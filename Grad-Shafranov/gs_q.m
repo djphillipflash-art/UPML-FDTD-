@@ -31,15 +31,18 @@ function q = gs_q(rho, p, Rg, zg, psig)
     else
         % ---- 用数值解插值 ----
         % 数值梯度（psig 的第 1 维是 R，第 2 维是 z）
-        NR = numel(Rg);  Nz = numel(zg);
-        hR = Rg(2)-Rg(1); hz = zg(2)-zg(1);
-        gR = zeros(NR,Nz);  gz = zeros(NR,Nz);
+        NR = numel(Rg); 
+        Nz = numel(zg);
+        hR = Rg(2)-Rg(1); 
+        hz = zg(2)-zg(1);
+        gR = zeros(NR,Nz);  
+        gz = zeros(NR,Nz);
         gR(2:end-1,:) = (psig(3:end,:) - psig(1:end-2,:)) / (2*hR);
         gz(:,2:end-1) = (psig(:,3:end) - psig(:,1:end-2)) / (2*hz);
 
         % interp2(X,Y,V,...) 要求 V 的尺寸为 (numel(Y), numel(X))
         % 这里声明 X=zg、Y=Rg，故 V 应为 numel(Rg) x numel(zg) = psig 本身
-        F = @(M) interp2(zg, Rg, M, z, R, 'spline');
+        F = @(M) interp2(zg, Rg, M, z, R, 'spline');%三次样条插值
         psi_f = F(psig);
         dR_f  = F(gR);
         dz_f  = F(gz);
@@ -56,5 +59,5 @@ function q = gs_q(rho, p, Rg, zg, psig)
     Fpsi = sqrt(p.F0^2 + p.F1 * psi_f);
 
     integrand = dl ./ (R .* gradpsi);
-    q = mean(Fpsi) / (2*pi) * trapz(th, integrand);
+    q = mean(Fpsi) / (2*pi) * trapz(th, integrand);%数值积分，被积函数是 θ 的周期函数。周期性梯形公式的误差随点数指数衰减（不是代数衰减），所以 trapz 在这里精度极高
 end

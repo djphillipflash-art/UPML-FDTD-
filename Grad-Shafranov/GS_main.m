@@ -1,19 +1,4 @@
-%% Grad-Shafranov 平衡求解器：二阶收敛性验证与物理量提取
-%  —— 用 Solov'ev 解析解做代码验证（code verification）
-%
-%  方程： Delta* psi = -A*R^2 - B
-%          Delta* = d^2/dR^2 - (1/R)*d/dR + d^2/dz^2
-%  解析解： psi = A/8*[R0^4 - (R^2-R0^2)^2] - B/2*z^2
-%          （对应 Solov'ev 型剖面 mu0*dp/dpsi = A，F*dF/dpsi = B）
-%
-%  流程： 第1步 参数
-%         第2步 基准网格求解
-%         第3步 网格收敛性（验证二阶）
-%         第4步 Richardson 外推与 GCI
-%         第5步 物理量：磁轴位置、q 剖面
-%         第6步 绘图与输出
-%
-%  依赖：gs_exact.m, gs_solve.m, gs_q.m
+
 
 clear; clc; close all;
 
@@ -127,19 +112,10 @@ fprintf('  GCI(细网格)   ： %.4f %%\n', 100*GCI);
 %% 第5步：物理量——q 剖面
 % 磁面标号 rho 的取值范围受计算域限制（磁面必须落在矩形域内）
 Rmin_ = Rmin;  Rmax_ = Rmax;  zmax_ = zmax;
-rho_lim = min([ R0^2 - Rmin_^2, Rmax_^2 - R0^2, (2*zmax_/sqrt(A/B))^2 ]);
+rho_lim = min([ R0^2 - Rmin_^2, Rmax_^2 - R0^2, 2*zmax_/sqrt(A/B) ]);
 rho_list = linspace(0.15, 0.85, 12) * sqrt(rho_lim);   % 避开磁轴附近（q→∞）
 
-% 插值朝向自检：把解析解放到网格上再插值回来，应与解析解一致
-[PSIchk, ~, ~] = gs_exact(R0g*ones(1,N0), ones(N0,1)*z0g', p);
-Rq = 0.85;  zq = 0.25;
-v_int = interp2(z0g, R0g, PSIchk, zq, Rq, 'spline');
-v_ana = gs_exact(Rq, zq, p);
-fprintf('\n插值自检： interp2 结果 = %.8f,  解析解 = %.8f,  差 = %.2e\n', ...
-        v_int, v_ana, abs(v_int-v_ana));
-if abs(v_int - v_ana) > 1e-4
-    warning('插值朝向可能不对，请检查 interp2 的参数顺序');
-end
+
 
 fprintf('\n---- q 剖面（数值解 vs 解析解）----\n');
 fprintf('%10s %14s %14s %12s\n', 'rho', 'q (数值)', 'q (解析)', '相对差');
@@ -151,57 +127,45 @@ for k = 1:numel(rho_list)
     fprintf('%10.4f %14.6f %14.6f %11.3f%%\n', ...
             rr, q_num(k), q_exa(k), 100*abs(q_num(k)-q_exa(k))/abs(q_exa(k)));
 end
-
 %% 第6步：绘图与输出
 % ---- 图 1：磁面 ----
-f1fig = figure('Visible','off','Position',[100 100 820 620]);
+figure;
 psip = psi0;  Rp = R0g;  zp = z0g;      % 复用第 2 步的基准网格解
 [PSIexp, ~, ~] = gs_exact(Rp*ones(1,N0), ones(N0,1)*zp', p);
 lev = linspace(0.05, 0.24, 14);
-contour(Rp, zp, psip.',   lev, 'b-',  'LineWidth', 1.8); hold on;   % 数值解（粗蓝实线）
-contour(Rp, zp, PSIexp.', lev, 'k--', 'LineWidth', 1.0);            % 解析解（细黑虚线，画在上层）
+contour(Rp, zp, psip.',   lev, 'r',  'LineWidth', 5); hold on;   % 数值解（粗红实线）
+contour(Rp, zp, PSIexp.', lev, 'y', 'LineWidth', 1.0);            % 解析解（细黄虚线，画在上层）
 plot(p.R0, 0, 'ro', 'MarkerFaceColor', 'r', 'MarkerSize', 6);
 grid on; box on;
 xlabel('R'); ylabel('z');
 title('Grad-Shafranov 磁面：数值解（蓝实线）vs Solov''ev 解析解（黑虚线）');
 legend({'数值解', '解析解', '磁轴'}, 'Location', 'eastoutside');
-lightfig(gcf);
-exportgraphics(f1fig, 'fig_gs_flux.png', 'Resolution', 150);
+
+
 
 % ---- 图 2：收敛阶 ----
-f2fig = figure('Visible','off','Position',[100 100 820 560]);
+figure
 loglog(h, e2,   'o-', 'LineWidth', 1.8, 'MarkerSize', 6); hold on;
 loglog(h, einf, 's-', 'LineWidth', 1.5, 'MarkerSize', 5);
 href = h(end)*[1 8];
-loglog(href, e2(end)*(href/h(end)).^2, 'k--', 'LineWidth', 1.2);
+loglog(href, e2(end)*(href/h(end)).^2, 'y', 'LineWidth', 1.2);
 grid on; box on;
 set(gca,'XDir','reverse');
 xlabel('网格步长 h'); ylabel('误差');
 title(sprintf('网格收敛性：拟合阶 %.2f（RMS）/ %.2f（max），理论二阶', ...
       order2(end), orderinf(end)));
 legend({'RMS 误差','max 误差','斜率 2 参考线'}, 'Location', 'northwest');
-lightfig(gcf);
-exportgraphics(f2fig, 'fig_gs_order.png', 'Resolution', 150);
+
+
 
 % ---- 图 3：q 剖面 ----
-f3fig = figure('Visible','off','Position',[100 100 820 560]);
-plot(rho_list, q_exa, 'k--', 'LineWidth', 1.8); hold on;
+figure
+plot(rho_list, q_exa, 'y', 'LineWidth', 1.8); hold on;
 plot(rho_list, q_num, 'bo-', 'LineWidth', 1.5, 'MarkerSize', 5);
 grid on; box on;
 xlabel('磁面标号 \rho'); ylabel('安全因子 q');
 title('安全因子剖面：数值解 vs 解析解');
 legend({'解析解','数值解'}, 'Location', 'northwest');
-lightfig(gcf);
-exportgraphics(f3fig, 'fig_gs_q.png', 'Resolution', 150);
 
-% ---- 数据输出 ----
-T1 = table(Nlist(:), h, e2, einf, [order2; NaN], psi_axis, R_axis, tsolve, ...
-     'VariableNames', {'N','h','err_RMS','err_max','order','psi_axis','R_axis','t_solve'});
-writetable(T1, 'out_gs_convergence.csv', 'Encoding', 'UTF-8');
 
-T2 = table(rho_list(:), q_num(:), q_exa(:), ...
-     'VariableNames', {'rho','q_numerical','q_exact'});
-writetable(T2, 'out_gs_q.csv', 'Encoding', 'UTF-8');
 
-fprintf('\n已输出：fig_gs_flux.png, fig_gs_order.png, fig_gs_q.png, ');
-fprintf('out_gs_convergence.csv, out_gs_q.csv\n');

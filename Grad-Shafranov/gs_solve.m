@@ -14,10 +14,6 @@ function [psi, R, z, info] = gs_solve(p, NR, Nz)
 %     + (psi_{i,j+1} - 2psi_{i,j} + psi_{i,j-1}) / hz^2
 %     = -A*R_i^2 - B
 %
-% 只对内部节点建立未知量，边界值由解析解给出（Dirichlet），
-% 因此本算例是纯粹的**代码验证**（code verification）：
-% 离散误差应当以二阶收敛到解析解。
-%
 % 输入
 %   p    : 参数结构体（A, B, R0, F0, F1, Rmin, Rmax, zmax）
 %   NR   : R 方向节点数
